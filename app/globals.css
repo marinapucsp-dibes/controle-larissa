@@ -23,6 +23,9 @@ a { color:#23211D; } a:hover { color:#6B685F; }
 .month-picker-actions { display:flex; gap:10px; justify-content:flex-end; }
 .btn-secondary { background:transparent; color:#6B685F; border:1px solid #E7E4DD; padding:12px 18px; border-radius:10px; font-family:'Source Sans 3', sans-serif; font-weight:700; font-size:14px; cursor:pointer; }
 .btn-secondary:hover { border-color:#C9C5BA; color:#23211D; }
+.btn-delete { background:transparent; color:#D14343; border:1px solid #F0D3D3; padding:12px 18px; border-radius:10px; font-family:'Source Sans 3', sans-serif; font-weight:700; font-size:14px; cursor:pointer; margin-right:auto; }
+.btn-delete:hover { background:#FDF0EF; }
+.btn-delete:disabled { opacity:0.5; cursor:not-allowed; }
 
 .tabbar-outer { background:#fff; border-bottom:1px solid #E7E4DD; position:sticky; top:78px; z-index:9; }
 .tabbar { max-width:1200px; margin:0 auto; padding:0 48px; display:flex; gap:6px; overflow-x:auto; }
@@ -69,6 +72,8 @@ a { color:#23211D; } a:hover { color:#6B685F; }
 .tx-list { display:flex; flex-direction:column; }
 .tx-row { display:flex; align-items:center; gap:14px; padding:13px 2px; border-bottom:1px solid #F2F1EC; }
 .tx-row:last-child { border-bottom:none; }
+.tx-row-clickable { cursor:pointer; border-radius:10px; margin:0 -8px; padding:13px 8px; }
+.tx-row-clickable:hover { background:#FBFAF8; }
 .tx-icon { width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 .tx-icon-letter { font-family:'Manrope', sans-serif; font-weight:800; font-size:14px; }
 .tx-info { flex:1; min-width:0; }

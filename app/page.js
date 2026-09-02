@@ -108,6 +108,57 @@ export default function HomePage() {
     setPoupanca((prev) => [json.deposito, ...prev]);
   }
 
+  async function editDespesa(id, payload) {
+    const res = await fetch('/api/despesas/' + id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error('Não foi possível salvar a despesa.');
+    const json = await res.json();
+    setDespesas((prev) => prev.map((d) => (d.id === id ? json.despesa : d)));
+  }
+
+  async function removeDespesa(id) {
+    const res = await fetch('/api/despesas/' + id, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Não foi possível excluir a despesa.');
+    setDespesas((prev) => prev.filter((d) => d.id !== id));
+  }
+
+  async function editReceita(id, payload) {
+    const res = await fetch('/api/receitas/' + id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error('Não foi possível salvar a receita.');
+    const json = await res.json();
+    setReceitas((prev) => prev.map((r) => (r.id === id ? json.receita : r)));
+  }
+
+  async function removeReceita(id) {
+    const res = await fetch('/api/receitas/' + id, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Não foi possível excluir a receita.');
+    setReceitas((prev) => prev.filter((r) => r.id !== id));
+  }
+
+  async function editPoupanca(id, payload) {
+    const res = await fetch('/api/poupanca/' + id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error('Não foi possível salvar o depósito.');
+    const json = await res.json();
+    setPoupanca((prev) => prev.map((p) => (p.id === id ? json.deposito : p)));
+  }
+
+  async function removePoupanca(id) {
+    const res = await fetch('/api/poupanca/' + id, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Não foi possível excluir o depósito.');
+    setPoupanca((prev) => prev.filter((p) => p.id !== id));
+  }
+
   return (
     <div>
       <div className="topbar no-print">
@@ -169,9 +220,15 @@ export default function HomePage() {
                 onSelectGroup={setSelectedGroupKey}
               />
             )}
-            {activeTab === 'despesas' && <DespesasTab despesas={monthDespesas} onSubmit={addDespesa} />}
-            {activeTab === 'receitas' && <ReceitasTab receitas={monthReceitas} onSubmit={addReceita} />}
-            {activeTab === 'poupanca' && <PoupancaTab poupanca={poupanca} onSubmit={addPoupanca} />}
+            {activeTab === 'despesas' && (
+              <DespesasTab despesas={monthDespesas} onSubmit={addDespesa} onUpdate={editDespesa} onDelete={removeDespesa} />
+            )}
+            {activeTab === 'receitas' && (
+              <ReceitasTab receitas={monthReceitas} onSubmit={addReceita} onUpdate={editReceita} onDelete={removeReceita} />
+            )}
+            {activeTab === 'poupanca' && (
+              <PoupancaTab poupanca={poupanca} onSubmit={addPoupanca} onUpdate={editPoupanca} onDelete={removePoupanca} />
+            )}
           </>
         )}
       </div>

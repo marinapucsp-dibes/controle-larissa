@@ -1,33 +1,79 @@
 'use client';
 
 import { useState } from 'react';
-import { formatBRL, hexTint, formatMesAnoLabel, currentMonthISO } from '../lib/format';
+import { formatBRL, hexTint, formatMesAnoLabel, currentMonthISO, digitsToAmount, amountToDigits, formatDigitsAsCurrency, extractDigits } from '../lib/format';
 
 const NOMES = ['Salário', 'Vale', 'Outro'];
 
 function emptyForm() {
-  return { nome: 'Salário', nomeCustom: '', valor: '', mesAno: currentMonthISO() };
+  return { nome: 'Salário', nomeCustom: '', valorDigits: '', mesAno: currentMonthISO() };
 }
 
-export default function ReceitasTab({ receitas, onSubmit }) {
+function formFromReceita(r) {
+  const isPreset = NOMES.includes(r.nome);
+  return {
+    nome: isPreset ? r.nome : 'Outro',
+    nomeCustom: isPreset ? '' : r.nome,
+    valorDigits: amountToDigits(r.valor),
+    mesAno: r.mesAno
+  };
+}
+
+export default function ReceitasTab({ receitas, onSubmit, onUpdate, onDelete }) {
   const [form, setForm] = useState(emptyForm());
+  const [editingId, setEditingId] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
 
   const finalNome = form.nome === 'Outro' ? form.nomeCustom.trim() : form.nome;
-  const valid = !!finalNome && parseFloat(form.valor) > 0 && !!form.mesAno;
+  const valid = !!finalNome && parseInt(form.valorDigits || '0', 10) > 0 && !!form.mesAno;
+
+  function startEdit(r) {
+    setEditingId(r.id);
+    setForm(formFromReceita(r));
+    setError('');
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setForm(emptyForm());
+    setError('');
+  }
 
   async function handleSubmit() {
     if (!valid || saving) return;
     setSaving(true);
     setError('');
+    const payload = { nome: finalNome, valor: digitsToAmount(form.valorDigits), mesAno: form.mesAno };
     try {
-      await onSubmit({ nome: finalNome, valor: parseFloat(String(form.valor).replace(',', '.')), mesAno: form.mesAno });
-      setForm({ ...emptyForm(), mesAno: form.mesAno });
+      if (editingId) {
+        await onUpdate(editingId, payload);
+        setEditingId(null);
+      } else {
+        await onSubmit(payload);
+      }
+      setForm(emptyForm());
     } catch (e) {
       setError('Não foi possível salvar. Tente novamente.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!editingId || deleting) return;
+    if (!window.confirm('Excluir esta receita? Essa ação não pode ser desfeita.')) return;
+    setDeleting(true);
+    setError('');
+    try {
+      await onDelete(editingId);
+      setEditingId(null);
+      setForm(emptyForm());
+    } catch (e) {
+      setError('Não foi possível excluir. Tente novamente.');
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -36,7 +82,7 @@ export default function ReceitasTab({ receitas, onSubmit }) {
   return (
     <div className="stack">
       <div className="card">
-        <h2>Nova receita</h2>
+        <h2>{editingId ? 'Editar receita' : 'Nova receita'}</h2>
 
         <div className="field-label">Nome</div>
         <div className="pill-grid-3">
@@ -61,7 +107,11 @@ export default function ReceitasTab({ receitas, onSubmit }) {
         <div className="field-row">
           <label className="field">
             <span>Valor</span>
-            <input type="number" min="0" step="0.01" value={form.valor} onChange={(e) => setForm((f) => ({ ...f, valor: e.target.value }))} placeholder="0,00" />
+            <input
+              type="text" inputMode="decimal"
+              value={formatDigitsAsCurrency(form.valorDigits)}
+              onChange={(e) => setForm((f) => ({ ...f, valorDigits: extractDigits(e.target.value) }))}
+            />
           </label>
           <label className="field">
             <span>Mês e ano</span>
@@ -71,8 +121,16 @@ export default function ReceitasTab({ receitas, onSubmit }) {
 
         <div className="form-actions">
           {error && <span className="form-error">{error}</span>}
-          <button className="btn-primary" onClick={handleSubmit} disabled={!valid || saving}>
-            {saving ? 'Salvando...' : 'Adicionar receita'}
+          {editingId && (
+            <button className="btn-delete" onClick={handleDelete} disabled={deleting}>
+              {deleting ? 'Excluindo...' : 'Excluir'}
+            </button>
+          )}
+          {editingId && (
+            <button className="btn-secondary" onClick={cancelEdit} disabled={saving || deleting}>Cancelar</button>
+          )}
+          <button className="btn-primary" onClick={handleSubmit} disabled={!valid || saving || deleting}>
+            {saving ? 'Salvando...' : editingId ? 'Salvar alterações' : 'Adicionar receita'}
           </button>
         </div>
       </div>
@@ -82,7 +140,7 @@ export default function ReceitasTab({ receitas, onSubmit }) {
         {sorted.length ? (
           <div className="tx-list">
             {sorted.map((r) => (
-              <div className="tx-row" key={r.id}>
+              <div className="tx-row tx-row-clickable" key={r.id} onClick={() => startEdit(r)}>
                 <div className="tx-icon" style={{ background: hexTint('#2E9E5B', 0.85) }}>
                   <span className="tx-icon-letter" style={{ color: '#2E9E5B' }}>{r.nome.charAt(0).toUpperCase()}</span>
                 </div>

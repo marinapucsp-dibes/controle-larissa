@@ -1,7 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { formatBRL, hexTint, formatDateLabel, periodicidadeLabel, groupKeyOf, todayISO, GROUP_PALETTE } from '../lib/format';
+import {
+  formatBRL, hexTint, formatDateLabel, periodicidadeLabel, groupKeyOf, todayISO, GROUP_PALETTE,
+  digitsToAmount, amountToDigits, formatDigitsAsCurrency, extractDigits
+} from '../lib/format';
 
 const TIPOS = ['Cartão de Crédito', 'Empréstimo', 'Boleto', 'Terceiros'];
 const PERIODOS = [
@@ -11,7 +14,19 @@ const PERIODOS = [
 ];
 
 function emptyForm() {
-  return { tipo: 'Cartão de Crédito', tipoDetalhe: '', nome: '', periodicidade: 'unica', parcelaAtual: '', valor: '', dataPagamento: todayISO() };
+  return { tipo: 'Cartão de Crédito', tipoDetalhe: '', nome: '', periodicidade: 'unica', parcelaAtual: '', valorDigits: '', dataPagamento: todayISO() };
+}
+
+function formFromDespesa(d) {
+  return {
+    tipo: d.tipo,
+    tipoDetalhe: d.tipoDetalhe || '',
+    nome: d.nome,
+    periodicidade: d.periodicidade,
+    parcelaAtual: d.parcelaAtual || '',
+    valorDigits: amountToDigits(d.valor),
+    dataPagamento: d.dataPagamento
+  };
 }
 
 function colorsByGroup(despesas) {
@@ -32,38 +47,74 @@ function colorsByGroup(despesas) {
   return map;
 }
 
-export default function DespesasTab({ despesas, onSubmit }) {
+export default function DespesasTab({ despesas, onSubmit, onUpdate, onDelete }) {
   const [form, setForm] = useState(emptyForm());
+  const [editingId, setEditingId] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
 
   const needsDetalhe = form.tipo === 'Cartão de Crédito' || form.tipo === 'Empréstimo';
   const valid =
     !!form.nome &&
-    parseFloat(form.valor) > 0 &&
+    parseInt(form.valorDigits || '0', 10) > 0 &&
     !!form.dataPagamento &&
     (!needsDetalhe || !!form.tipoDetalhe) &&
     (form.periodicidade !== 'parcelado' || !!form.parcelaAtual);
+
+  function startEdit(d) {
+    setEditingId(d.id);
+    setForm(formFromDespesa(d));
+    setError('');
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setForm(emptyForm());
+    setError('');
+  }
 
   async function handleSubmit() {
     if (!valid || saving) return;
     setSaving(true);
     setError('');
+    const payload = {
+      tipo: form.tipo,
+      tipoDetalhe: needsDetalhe ? form.tipoDetalhe : '',
+      nome: form.nome,
+      periodicidade: form.periodicidade,
+      parcelaAtual: form.periodicidade === 'parcelado' ? form.parcelaAtual : '',
+      valor: digitsToAmount(form.valorDigits),
+      dataPagamento: form.dataPagamento
+    };
     try {
-      await onSubmit({
-        tipo: form.tipo,
-        tipoDetalhe: needsDetalhe ? form.tipoDetalhe : '',
-        nome: form.nome,
-        periodicidade: form.periodicidade,
-        parcelaAtual: form.periodicidade === 'parcelado' ? form.parcelaAtual : '',
-        valor: parseFloat(String(form.valor).replace(',', '.')),
-        dataPagamento: form.dataPagamento
-      });
+      if (editingId) {
+        await onUpdate(editingId, payload);
+        setEditingId(null);
+      } else {
+        await onSubmit(payload);
+      }
       setForm(emptyForm());
     } catch (e) {
       setError('Não foi possível salvar. Tente novamente.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!editingId || deleting) return;
+    if (!window.confirm('Excluir esta despesa? Essa ação não pode ser desfeita.')) return;
+    setDeleting(true);
+    setError('');
+    try {
+      await onDelete(editingId);
+      setEditingId(null);
+      setForm(emptyForm());
+    } catch (e) {
+      setError('Não foi possível excluir. Tente novamente.');
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -73,7 +124,7 @@ export default function DespesasTab({ despesas, onSubmit }) {
   return (
     <div className="stack">
       <div className="card">
-        <h2>Nova despesa</h2>
+        <h2>{editingId ? 'Editar despesa' : 'Nova despesa'}</h2>
 
         <div className="field-label">Tipo</div>
         <div className="pill-grid-4">
@@ -129,7 +180,11 @@ export default function DespesasTab({ despesas, onSubmit }) {
         <div className="field-row">
           <label className="field">
             <span>Valor</span>
-            <input type="number" min="0" step="0.01" value={form.valor} onChange={(e) => setForm((f) => ({ ...f, valor: e.target.value }))} placeholder="0,00" />
+            <input
+              type="text" inputMode="decimal"
+              value={formatDigitsAsCurrency(form.valorDigits)}
+              onChange={(e) => setForm((f) => ({ ...f, valorDigits: extractDigits(e.target.value) }))}
+            />
           </label>
           <label className="field">
             <span>Data do pagamento</span>
@@ -139,8 +194,16 @@ export default function DespesasTab({ despesas, onSubmit }) {
 
         <div className="form-actions">
           {error && <span className="form-error">{error}</span>}
-          <button className="btn-primary" onClick={handleSubmit} disabled={!valid || saving}>
-            {saving ? 'Salvando...' : 'Adicionar despesa'}
+          {editingId && (
+            <button className="btn-delete" onClick={handleDelete} disabled={deleting}>
+              {deleting ? 'Excluindo...' : 'Excluir'}
+            </button>
+          )}
+          {editingId && (
+            <button className="btn-secondary" onClick={cancelEdit} disabled={saving || deleting}>Cancelar</button>
+          )}
+          <button className="btn-primary" onClick={handleSubmit} disabled={!valid || saving || deleting}>
+            {saving ? 'Salvando...' : editingId ? 'Salvar alterações' : 'Adicionar despesa'}
           </button>
         </div>
       </div>
@@ -155,7 +218,7 @@ export default function DespesasTab({ despesas, onSubmit }) {
               const initialSrc = d.tipoDetalhe && d.tipoDetalhe.length ? d.tipoDetalhe : d.tipo;
               const tipoLabel = d.tipo + (d.tipoDetalhe ? ' · ' + d.tipoDetalhe : '');
               return (
-                <div className="tx-row" key={d.id}>
+                <div className="tx-row tx-row-clickable" key={d.id} onClick={() => startEdit(d)}>
                   <div className="tx-icon" style={{ background: hexTint(color, 0.82) }}>
                     <span className="tx-icon-letter" style={{ color }}>{initialSrc.charAt(0).toUpperCase()}</span>
                   </div>

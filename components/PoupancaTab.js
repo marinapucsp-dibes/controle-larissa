@@ -1,30 +1,70 @@
 'use client';
 
 import { useState } from 'react';
-import { formatBRL, hexTint, formatDateLabel, todayISO } from '../lib/format';
+import { formatBRL, hexTint, formatDateLabel, todayISO, digitsToAmount, amountToDigits, formatDigitsAsCurrency, extractDigits } from '../lib/format';
 
 function emptyForm() {
-  return { instituicao: '', valor: '', data: todayISO() };
+  return { instituicao: '', valorDigits: '', data: todayISO() };
 }
 
-export default function PoupancaTab({ poupanca, onSubmit }) {
+function formFromDeposito(p) {
+  return { instituicao: p.instituicao, valorDigits: amountToDigits(p.valor), data: p.dataDeposito };
+}
+
+export default function PoupancaTab({ poupanca, onSubmit, onUpdate, onDelete }) {
   const [form, setForm] = useState(emptyForm());
+  const [editingId, setEditingId] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
 
-  const valid = !!form.instituicao && parseFloat(form.valor) > 0 && !!form.data;
+  const valid = !!form.instituicao && parseInt(form.valorDigits || '0', 10) > 0 && !!form.data;
+
+  function startEdit(p) {
+    setEditingId(p.id);
+    setForm(formFromDeposito(p));
+    setError('');
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setForm(emptyForm());
+    setError('');
+  }
 
   async function handleSubmit() {
     if (!valid || saving) return;
     setSaving(true);
     setError('');
+    const payload = { instituicao: form.instituicao, valor: digitsToAmount(form.valorDigits), dataDeposito: form.data };
     try {
-      await onSubmit({ instituicao: form.instituicao, valor: parseFloat(String(form.valor).replace(',', '.')), dataDeposito: form.data });
-      setForm({ ...emptyForm(), data: form.data });
+      if (editingId) {
+        await onUpdate(editingId, payload);
+        setEditingId(null);
+      } else {
+        await onSubmit(payload);
+      }
+      setForm(emptyForm());
     } catch (e) {
       setError('Não foi possível salvar. Tente novamente.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!editingId || deleting) return;
+    if (!window.confirm('Excluir este depósito? Essa ação não pode ser desfeita.')) return;
+    setDeleting(true);
+    setError('');
+    try {
+      await onDelete(editingId);
+      setEditingId(null);
+      setForm(emptyForm());
+    } catch (e) {
+      setError('Não foi possível excluir. Tente novamente.');
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -34,7 +74,7 @@ export default function PoupancaTab({ poupanca, onSubmit }) {
   return (
     <div className="stack">
       <div className="card">
-        <h2>Novo depósito</h2>
+        <h2>{editingId ? 'Editar depósito' : 'Novo depósito'}</h2>
         <div className="field-row">
           <label className="field">
             <span>Instituição</span>
@@ -47,12 +87,24 @@ export default function PoupancaTab({ poupanca, onSubmit }) {
         </div>
         <label className="field">
           <span>Valor</span>
-          <input type="number" min="0" step="0.01" value={form.valor} onChange={(e) => setForm((f) => ({ ...f, valor: e.target.value }))} placeholder="0,00" />
+          <input
+            type="text" inputMode="decimal"
+            value={formatDigitsAsCurrency(form.valorDigits)}
+            onChange={(e) => setForm((f) => ({ ...f, valorDigits: extractDigits(e.target.value) }))}
+          />
         </label>
         <div className="form-actions">
           {error && <span className="form-error">{error}</span>}
-          <button className="btn-primary" onClick={handleSubmit} disabled={!valid || saving}>
-            {saving ? 'Salvando...' : 'Adicionar depósito'}
+          {editingId && (
+            <button className="btn-delete" onClick={handleDelete} disabled={deleting}>
+              {deleting ? 'Excluindo...' : 'Excluir'}
+            </button>
+          )}
+          {editingId && (
+            <button className="btn-secondary" onClick={cancelEdit} disabled={saving || deleting}>Cancelar</button>
+          )}
+          <button className="btn-primary" onClick={handleSubmit} disabled={!valid || saving || deleting}>
+            {saving ? 'Salvando...' : editingId ? 'Salvar alterações' : 'Adicionar depósito'}
           </button>
         </div>
       </div>
@@ -67,7 +119,7 @@ export default function PoupancaTab({ poupanca, onSubmit }) {
         {sorted.length ? (
           <div className="tx-list">
             {sorted.map((p) => (
-              <div className="tx-row" key={p.id}>
+              <div className="tx-row tx-row-clickable" key={p.id} onClick={() => startEdit(p)}>
                 <div className="tx-icon" style={{ background: hexTint('#2E9E5B', 0.85) }}>
                   <span className="tx-icon-letter" style={{ color: '#2E9E5B' }}>{p.instituicao.charAt(0).toUpperCase()}</span>
                 </div>
