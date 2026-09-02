@@ -12,9 +12,14 @@ const PERIODOS = [
   { key: 'parcelado', label: 'Parcelado' },
   { key: 'recorrente', label: 'Recorrente' }
 ];
+const DETALHE_LABEL = {
+  'Cartão de Crédito': { label: 'Nome do cartão', placeholder: 'Ex: Nubank' },
+  'Empréstimo': { label: 'Nome do banco', placeholder: 'Ex: Banco do Brasil' },
+  'Terceiros': { label: 'Nome de quem deve', placeholder: 'Ex: Gabi' }
+};
 
 function emptyForm() {
-  return { tipo: 'Cartão de Crédito', tipoDetalhe: '', nome: '', periodicidade: 'unica', parcelaAtual: '', valorDigits: '', dataPagamento: todayISO() };
+  return { tipo: 'Cartão de Crédito', tipoDetalhe: '', nome: '', periodicidade: 'unica', parcelaAtual: '', parcelaTotal: '2', valorDigits: '', dataPagamento: todayISO() };
 }
 
 function formFromDespesa(d) {
@@ -24,6 +29,7 @@ function formFromDespesa(d) {
     nome: d.nome,
     periodicidade: d.periodicidade,
     parcelaAtual: d.parcelaAtual || '',
+    parcelaTotal: '2',
     valorDigits: amountToDigits(d.valor),
     dataPagamento: d.dataPagamento
   };
@@ -54,13 +60,14 @@ export default function DespesasTab({ despesas, onSubmit, onUpdate, onDelete }) 
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
 
-  const needsDetalhe = form.tipo === 'Cartão de Crédito' || form.tipo === 'Empréstimo';
+  const needsDetalhe = !!DETALHE_LABEL[form.tipo];
+  const parcelaTotalNum = parseInt(form.parcelaTotal, 10);
   const valid =
     !!form.nome &&
     parseInt(form.valorDigits || '0', 10) > 0 &&
     !!form.dataPagamento &&
     (!needsDetalhe || !!form.tipoDetalhe) &&
-    (form.periodicidade !== 'parcelado' || !!form.parcelaAtual);
+    (form.periodicidade !== 'parcelado' || (editingId ? !!form.parcelaAtual : (parcelaTotalNum >= 2 && parcelaTotalNum <= 60)));
 
   function startEdit(d) {
     setEditingId(d.id);
@@ -78,21 +85,20 @@ export default function DespesasTab({ despesas, onSubmit, onUpdate, onDelete }) 
     if (!valid || saving) return;
     setSaving(true);
     setError('');
-    const payload = {
+    const base = {
       tipo: form.tipo,
       tipoDetalhe: needsDetalhe ? form.tipoDetalhe : '',
       nome: form.nome,
       periodicidade: form.periodicidade,
-      parcelaAtual: form.periodicidade === 'parcelado' ? form.parcelaAtual : '',
       valor: digitsToAmount(form.valorDigits),
       dataPagamento: form.dataPagamento
     };
     try {
       if (editingId) {
-        await onUpdate(editingId, payload);
+        await onUpdate(editingId, { ...base, parcelaAtual: form.periodicidade === 'parcelado' ? form.parcelaAtual : '' });
         setEditingId(null);
       } else {
-        await onSubmit(payload);
+        await onSubmit({ ...base, parcelaTotal: form.periodicidade === 'parcelado' ? parcelaTotalNum : undefined });
       }
       setForm(emptyForm());
     } catch (e) {
@@ -120,6 +126,7 @@ export default function DespesasTab({ despesas, onSubmit, onUpdate, onDelete }) 
 
   const colorByKey = colorsByGroup(despesas);
   const sorted = despesas.slice().sort((a, b) => new Date(b.dataPagamento) - new Date(a.dataPagamento));
+  const detalheInfo = DETALHE_LABEL[form.tipo];
 
   return (
     <div className="stack">
@@ -139,16 +146,10 @@ export default function DespesasTab({ despesas, onSubmit, onUpdate, onDelete }) 
           ))}
         </div>
 
-        {form.tipo === 'Cartão de Crédito' && (
+        {detalheInfo && (
           <label className="field">
-            <span>Nome do cartão</span>
-            <input type="text" value={form.tipoDetalhe} onChange={(e) => setForm((f) => ({ ...f, tipoDetalhe: e.target.value }))} placeholder="Ex: Nubank" />
-          </label>
-        )}
-        {form.tipo === 'Empréstimo' && (
-          <label className="field">
-            <span>Nome do banco</span>
-            <input type="text" value={form.tipoDetalhe} onChange={(e) => setForm((f) => ({ ...f, tipoDetalhe: e.target.value }))} placeholder="Ex: Banco do Brasil" />
+            <span>{detalheInfo.label}</span>
+            <input type="text" value={form.tipoDetalhe} onChange={(e) => setForm((f) => ({ ...f, tipoDetalhe: e.target.value }))} placeholder={detalheInfo.placeholder} />
           </label>
         )}
 
@@ -170,11 +171,26 @@ export default function DespesasTab({ despesas, onSubmit, onUpdate, onDelete }) 
           ))}
         </div>
 
-        {form.periodicidade === 'parcelado' && (
+        {form.periodicidade === 'parcelado' && !editingId && (
+          <label className="field">
+            <span>Em quantas parcelas?</span>
+            <input
+              type="number" min="2" max="60" value={form.parcelaTotal}
+              onChange={(e) => setForm((f) => ({ ...f, parcelaTotal: e.target.value }))}
+            />
+          </label>
+        )}
+        {form.periodicidade === 'parcelado' && !!editingId && (
           <label className="field">
             <span>Parcela atual</span>
             <input type="text" value={form.parcelaAtual} onChange={(e) => setForm((f) => ({ ...f, parcelaAtual: e.target.value }))} placeholder="Ex: 1/6" />
           </label>
+        )}
+        {form.periodicidade === 'parcelado' && !editingId && parcelaTotalNum >= 2 && (
+          <div className="field-hint">Vai lançar a parcela 1/{parcelaTotalNum} neste mês e as seguintes automaticamente nos próximos meses.</div>
+        )}
+        {form.periodicidade === 'recorrente' && !editingId && (
+          <div className="field-hint">Vai lançar essa despesa neste mês e se repetir automaticamente pelos próximos 12 meses.</div>
         )}
 
         <div className="field-row">

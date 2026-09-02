@@ -5,6 +5,7 @@ import Dashboard from '../components/Dashboard';
 import DespesasTab from '../components/DespesasTab';
 import ReceitasTab from '../components/ReceitasTab';
 import PoupancaTab from '../components/PoupancaTab';
+import ContasTab from '../components/ContasTab';
 import MonthNav from '../components/MonthNav';
 import MonthlyReport from '../components/MonthlyReport';
 import { isDateInMonth, isMesAnoInMonth } from '../lib/format';
@@ -13,7 +14,8 @@ const TABS = [
   { key: 'dashboard', label: 'Dashboard' },
   { key: 'despesas', label: 'Despesas' },
   { key: 'receitas', label: 'Receitas' },
-  { key: 'poupanca', label: 'Poupança' }
+  { key: 'poupanca', label: 'Poupança' },
+  { key: 'contas', label: 'Contas' }
 ];
 
 export default function HomePage() {
@@ -23,6 +25,7 @@ export default function HomePage() {
   const [despesas, setDespesas] = useState([]);
   const [receitas, setReceitas] = useState([]);
   const [poupanca, setPoupanca] = useState([]);
+  const [pagamentos, setPagamentos] = useState([]);
   const [selectedGroupKey, setSelectedGroupKey] = useState(null);
   const now = new Date();
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
@@ -37,6 +40,10 @@ export default function HomePage() {
     () => receitas.filter((r) => isMesAnoInMonth(r.mesAno, selectedYear, selectedMonth)),
     [receitas, selectedYear, selectedMonth]
   );
+  const monthPagamentos = useMemo(
+    () => pagamentos.filter((p) => p.ano === selectedYear && p.mes === selectedMonth + 1),
+    [pagamentos, selectedYear, selectedMonth]
+  );
 
   function handleMonthChange(year, month) {
     setSelectedYear(year);
@@ -48,12 +55,18 @@ export default function HomePage() {
     setLoading(true);
     setLoadError('');
     try {
-      const [dRes, rRes, pRes] = await Promise.all([fetch('/api/despesas'), fetch('/api/receitas'), fetch('/api/poupanca')]);
-      if (!dRes.ok || !rRes.ok || !pRes.ok) throw new Error('Falha ao carregar dados');
-      const [dJson, rJson, pJson] = await Promise.all([dRes.json(), rRes.json(), pRes.json()]);
+      const [dRes, rRes, pRes, pagRes] = await Promise.all([
+        fetch('/api/despesas'),
+        fetch('/api/receitas'),
+        fetch('/api/poupanca'),
+        fetch('/api/pagamentos')
+      ]);
+      if (!dRes.ok || !rRes.ok || !pRes.ok || !pagRes.ok) throw new Error('Falha ao carregar dados');
+      const [dJson, rJson, pJson, pagJson] = await Promise.all([dRes.json(), rRes.json(), pRes.json(), pagRes.json()]);
       setDespesas(dJson.despesas || []);
       setReceitas(rJson.receitas || []);
       setPoupanca(pJson.poupanca || []);
+      setPagamentos(pagJson.pagamentos || []);
     } catch (e) {
       setLoadError('Não foi possível carregar seus dados. Verifique sua conexão e tente novamente.');
     } finally {
@@ -83,7 +96,7 @@ export default function HomePage() {
     });
     if (!res.ok) throw new Error('Não foi possível salvar a despesa.');
     const json = await res.json();
-    setDespesas((prev) => [json.despesa, ...prev]);
+    setDespesas((prev) => [...json.despesas, ...prev]);
   }
 
   async function addReceita(payload) {
@@ -106,6 +119,27 @@ export default function HomePage() {
     if (!res.ok) throw new Error('Não foi possível salvar o depósito.');
     const json = await res.json();
     setPoupanca((prev) => [json.deposito, ...prev]);
+    await refreshDespesas();
+  }
+
+  async function refreshDespesas() {
+    const res = await fetch('/api/despesas');
+    if (!res.ok) return;
+    const json = await res.json();
+    setDespesas(json.despesas || []);
+  }
+
+  async function registrarPagamento(payload) {
+    const res = await fetch('/api/pagamentos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error('Não foi possível registrar o pagamento.');
+    const [dRes, pagRes] = await Promise.all([fetch('/api/despesas'), fetch('/api/pagamentos')]);
+    const [dJson, pagJson] = await Promise.all([dRes.json(), pagRes.json()]);
+    setDespesas(dJson.despesas || []);
+    setPagamentos(pagJson.pagamentos || []);
   }
 
   async function editDespesa(id, payload) {
@@ -151,12 +185,14 @@ export default function HomePage() {
     if (!res.ok) throw new Error('Não foi possível salvar o depósito.');
     const json = await res.json();
     setPoupanca((prev) => prev.map((p) => (p.id === id ? json.deposito : p)));
+    await refreshDespesas();
   }
 
   async function removePoupanca(id) {
     const res = await fetch('/api/poupanca/' + id, { method: 'DELETE' });
     if (!res.ok) throw new Error('Não foi possível excluir o depósito.');
     setPoupanca((prev) => prev.filter((p) => p.id !== id));
+    await refreshDespesas();
   }
 
   return (
@@ -228,6 +264,15 @@ export default function HomePage() {
             )}
             {activeTab === 'poupanca' && (
               <PoupancaTab poupanca={poupanca} onSubmit={addPoupanca} onUpdate={editPoupanca} onDelete={removePoupanca} />
+            )}
+            {activeTab === 'contas' && (
+              <ContasTab
+                despesas={monthDespesas}
+                pagamentos={monthPagamentos}
+                year={selectedYear}
+                month={selectedMonth}
+                onRegistrarPagamento={registrarPagamento}
+              />
             )}
           </>
         )}
