@@ -1,0 +1,177 @@
+'use client';
+
+import { useState } from 'react';
+import { formatBRL, hexTint, formatDateLabel, periodicidadeLabel, groupKeyOf, todayISO, GROUP_PALETTE } from '../lib/format';
+
+const TIPOS = ['Cartão de Crédito', 'Empréstimo', 'Boleto', 'Terceiros'];
+const PERIODOS = [
+  { key: 'unica', label: 'Parcela única' },
+  { key: 'parcelado', label: 'Parcelado' },
+  { key: 'recorrente', label: 'Recorrente' }
+];
+
+function emptyForm() {
+  return { tipo: 'Cartão de Crédito', tipoDetalhe: '', nome: '', periodicidade: 'unica', parcelaAtual: '', valor: '', dataPagamento: todayISO() };
+}
+
+function colorsByGroup(despesas) {
+  const order = [];
+  const seen = {};
+  despesas.forEach((d) => {
+    const key = groupKeyOf(d);
+    if (!seen[key]) { seen[key] = true; order.push({ key, total: 0 }); }
+  });
+  despesas.forEach((d) => {
+    const key = groupKeyOf(d);
+    const entry = order.find((o) => o.key === key);
+    entry.total += d.valor;
+  });
+  order.sort((a, b) => b.total - a.total);
+  const map = {};
+  order.forEach((o, i) => { map[o.key] = GROUP_PALETTE[i % GROUP_PALETTE.length]; });
+  return map;
+}
+
+export default function DespesasTab({ despesas, onSubmit }) {
+  const [form, setForm] = useState(emptyForm());
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const needsDetalhe = form.tipo === 'Cartão de Crédito' || form.tipo === 'Empréstimo';
+  const valid =
+    !!form.nome &&
+    parseFloat(form.valor) > 0 &&
+    !!form.dataPagamento &&
+    (!needsDetalhe || !!form.tipoDetalhe) &&
+    (form.periodicidade !== 'parcelado' || !!form.parcelaAtual);
+
+  async function handleSubmit() {
+    if (!valid || saving) return;
+    setSaving(true);
+    setError('');
+    try {
+      await onSubmit({
+        tipo: form.tipo,
+        tipoDetalhe: needsDetalhe ? form.tipoDetalhe : '',
+        nome: form.nome,
+        periodicidade: form.periodicidade,
+        parcelaAtual: form.periodicidade === 'parcelado' ? form.parcelaAtual : '',
+        valor: parseFloat(String(form.valor).replace(',', '.')),
+        dataPagamento: form.dataPagamento
+      });
+      setForm(emptyForm());
+    } catch (e) {
+      setError('Não foi possível salvar. Tente novamente.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const colorByKey = colorsByGroup(despesas);
+  const sorted = despesas.slice().sort((a, b) => new Date(b.dataPagamento) - new Date(a.dataPagamento));
+
+  return (
+    <div className="stack">
+      <div className="card">
+        <h2>Nova despesa</h2>
+
+        <div className="field-label">Tipo</div>
+        <div className="pill-grid-4">
+          {TIPOS.map((t) => (
+            <button
+              key={t}
+              className={'pill-btn' + (form.tipo === t ? ' active' : '')}
+              onClick={() => setForm((f) => ({ ...f, tipo: t, tipoDetalhe: '' }))}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+
+        {form.tipo === 'Cartão de Crédito' && (
+          <label className="field">
+            <span>Nome do cartão</span>
+            <input type="text" value={form.tipoDetalhe} onChange={(e) => setForm((f) => ({ ...f, tipoDetalhe: e.target.value }))} placeholder="Ex: Nubank" />
+          </label>
+        )}
+        {form.tipo === 'Empréstimo' && (
+          <label className="field">
+            <span>Nome do banco</span>
+            <input type="text" value={form.tipoDetalhe} onChange={(e) => setForm((f) => ({ ...f, tipoDetalhe: e.target.value }))} placeholder="Ex: Banco do Brasil" />
+          </label>
+        )}
+
+        <label className="field">
+          <span>Nome da despesa</span>
+          <input type="text" value={form.nome} onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))} placeholder="Ex: Supermercado" />
+        </label>
+
+        <div className="field-label">Periodicidade</div>
+        <div className="pill-grid-3">
+          {PERIODOS.map((p) => (
+            <button
+              key={p.key}
+              className={'pill-btn' + (form.periodicidade === p.key ? ' active' : '')}
+              onClick={() => setForm((f) => ({ ...f, periodicidade: p.key, parcelaAtual: '' }))}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        {form.periodicidade === 'parcelado' && (
+          <label className="field">
+            <span>Parcela atual</span>
+            <input type="text" value={form.parcelaAtual} onChange={(e) => setForm((f) => ({ ...f, parcelaAtual: e.target.value }))} placeholder="Ex: 1/6" />
+          </label>
+        )}
+
+        <div className="field-row">
+          <label className="field">
+            <span>Valor</span>
+            <input type="number" min="0" step="0.01" value={form.valor} onChange={(e) => setForm((f) => ({ ...f, valor: e.target.value }))} placeholder="0,00" />
+          </label>
+          <label className="field">
+            <span>Data do pagamento</span>
+            <input type="date" value={form.dataPagamento} onChange={(e) => setForm((f) => ({ ...f, dataPagamento: e.target.value }))} />
+          </label>
+        </div>
+
+        <div className="form-actions">
+          {error && <span className="form-error">{error}</span>}
+          <button className="btn-primary" onClick={handleSubmit} disabled={!valid || saving}>
+            {saving ? 'Salvando...' : 'Adicionar despesa'}
+          </button>
+        </div>
+      </div>
+
+      <div className="card">
+        <h2>Despesas cadastradas</h2>
+        {sorted.length ? (
+          <div className="tx-list">
+            {sorted.map((d) => {
+              const key = groupKeyOf(d);
+              const color = colorByKey[key] || '#9B9A93';
+              const initialSrc = d.tipoDetalhe && d.tipoDetalhe.length ? d.tipoDetalhe : d.tipo;
+              const tipoLabel = d.tipo + (d.tipoDetalhe ? ' · ' + d.tipoDetalhe : '');
+              return (
+                <div className="tx-row" key={d.id}>
+                  <div className="tx-icon" style={{ background: hexTint(color, 0.82) }}>
+                    <span className="tx-icon-letter" style={{ color }}>{initialSrc.charAt(0).toUpperCase()}</span>
+                  </div>
+                  <div className="tx-info">
+                    <div className="tx-desc">{d.nome}</div>
+                    <div className="tx-meta">{tipoLabel} · {periodicidadeLabel(d)} · {formatDateLabel(d.dataPagamento)}</div>
+                  </div>
+                  <div className="tx-value negative">{formatBRL(d.valor)}</div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="empty-state">Nenhuma despesa cadastrada ainda.</div>
+        )}
+      </div>
+    </div>
+  );
+}
