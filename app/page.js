@@ -5,15 +5,18 @@ import Dashboard from '../components/Dashboard';
 import DespesasTab from '../components/DespesasTab';
 import ReceitasTab from '../components/ReceitasTab';
 import PoupancaTab from '../components/PoupancaTab';
+import GuiaEquilibrioTab from '../components/GuiaEquilibrioTab';
 import MonthNav from '../components/MonthNav';
 import MonthlyReport from '../components/MonthlyReport';
 import { isDateInMonth, isMesAnoInMonth } from '../lib/format';
+import { defaultGuia } from '../lib/guiaDefaults';
 
 const TABS = [
   { key: 'dashboard', label: 'Dashboard' },
   { key: 'despesas', label: 'Despesas' },
   { key: 'receitas', label: 'Receitas' },
-  { key: 'poupanca', label: 'Poupança' }
+  { key: 'poupanca', label: 'Poupança' },
+  { key: 'guia', label: 'Guia de Equilíbrio' }
 ];
 
 export default function HomePage() {
@@ -23,6 +26,7 @@ export default function HomePage() {
   const [despesas, setDespesas] = useState([]);
   const [receitas, setReceitas] = useState([]);
   const [poupanca, setPoupanca] = useState([]);
+  const [guia, setGuia] = useState(defaultGuia());
   const [selectedGroupKey, setSelectedGroupKey] = useState(null);
   const now = new Date();
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
@@ -48,12 +52,18 @@ export default function HomePage() {
     setLoading(true);
     setLoadError('');
     try {
-      const [dRes, rRes, pRes] = await Promise.all([fetch('/api/despesas'), fetch('/api/receitas'), fetch('/api/poupanca')]);
-      if (!dRes.ok || !rRes.ok || !pRes.ok) throw new Error('Falha ao carregar dados');
-      const [dJson, rJson, pJson] = await Promise.all([dRes.json(), rRes.json(), pRes.json()]);
+      const [dRes, rRes, pRes, gRes] = await Promise.all([
+        fetch('/api/despesas'),
+        fetch('/api/receitas'),
+        fetch('/api/poupanca'),
+        fetch('/api/guia')
+      ]);
+      if (!dRes.ok || !rRes.ok || !pRes.ok || !gRes.ok) throw new Error('Falha ao carregar dados');
+      const [dJson, rJson, pJson, gJson] = await Promise.all([dRes.json(), rRes.json(), pRes.json(), gRes.json()]);
       setDespesas(dJson.despesas || []);
       setReceitas(rJson.receitas || []);
       setPoupanca(pJson.poupanca || []);
+      setGuia(gJson.dados || defaultGuia());
     } catch (e) {
       setLoadError('Não foi possível carregar seus dados. Verifique sua conexão e tente novamente.');
     } finally {
@@ -106,6 +116,16 @@ export default function HomePage() {
     if (!res.ok) throw new Error('Não foi possível salvar o depósito.');
     const json = await res.json();
     setPoupanca((prev) => [json.deposito, ...prev]);
+  }
+
+  async function saveGuia(novoGuia) {
+    const res = await fetch('/api/guia', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(novoGuia)
+    });
+    if (!res.ok) throw new Error('Não foi possível salvar o guia.');
+    setGuia(novoGuia);
   }
 
   return (
@@ -172,6 +192,7 @@ export default function HomePage() {
             {activeTab === 'despesas' && <DespesasTab despesas={monthDespesas} onSubmit={addDespesa} />}
             {activeTab === 'receitas' && <ReceitasTab receitas={monthReceitas} onSubmit={addReceita} />}
             {activeTab === 'poupanca' && <PoupancaTab poupanca={poupanca} onSubmit={addPoupanca} />}
+            {activeTab === 'guia' && <GuiaEquilibrioTab dados={guia} onSave={saveGuia} />}
           </>
         )}
       </div>
