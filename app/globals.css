@@ -10,6 +10,20 @@ a { color:#23211D; } a:hover { color:#6B685F; }
 .logout-btn { background:transparent; border:none; color:#6B685F; font-weight:700; font-size:13px; cursor:pointer; font-family:'Source Sans 3', sans-serif; }
 .logout-btn:hover { color:#23211D; }
 
+.month-nav { display:flex; align-items:center; gap:2px; position:relative; }
+.month-nav-arrow { width:30px; height:30px; border:none; background:transparent; border-radius:8px; cursor:pointer; font-size:17px; color:#6B685F; }
+.month-nav-arrow:hover { background:#F2F1EC; color:#23211D; }
+.month-nav-label { border:none; background:transparent; cursor:pointer; padding:0 6px; font-family:'Manrope', sans-serif; font-weight:800; font-size:16px; color:#23211D; white-space:nowrap; }
+.month-nav-label:hover { color:#6B685F; }
+
+.month-picker-overlay { position:fixed; inset:0; background:rgba(35,33,29,0.35); display:flex; align-items:flex-start; justify-content:center; z-index:50; padding-top:120px; }
+.month-picker-card { background:#fff; border:1px solid #E7E4DD; border-radius:16px; padding:22px; width:280px; max-width:calc(100% - 40px); box-shadow:0 20px 50px rgba(35,33,29,0.2); }
+.month-picker-title { font-family:'Manrope', sans-serif; font-weight:800; font-size:15px; margin-bottom:14px; }
+.input-month { width:100%; border:1px solid #E7E4DD; border-radius:10px; padding:11px 14px; font-size:15px; font-family:'Source Sans 3', sans-serif; color:#23211D; background:#FBFAF8; margin-bottom:16px; }
+.month-picker-actions { display:flex; gap:10px; justify-content:flex-end; }
+.btn-secondary { background:transparent; color:#6B685F; border:1px solid #E7E4DD; padding:12px 18px; border-radius:10px; font-family:'Source Sans 3', sans-serif; font-weight:700; font-size:14px; cursor:pointer; }
+.btn-secondary:hover { border-color:#C9C5BA; color:#23211D; }
+
 .tabbar-outer { background:#fff; border-bottom:1px solid #E7E4DD; position:sticky; top:78px; z-index:9; }
 .tabbar { max-width:1200px; margin:0 auto; padding:0 48px; display:flex; gap:6px; overflow-x:auto; }
 .tab-btn { padding:15px 16px; border:none; background:transparent; font-family:'Source Sans 3', sans-serif; font-weight:700; font-size:14px; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; color:#6B685F; white-space:nowrap; }
@@ -88,8 +102,26 @@ a { color:#23211D; } a:hover { color:#6B685F; }
 .login-card .field { text-align:left; }
 .login-error { color:#D14343; font-size:13px; font-weight:600; margin:-8px 0 16px; }
 
+.report-link { background:transparent; border:none; color:#23211D; font-weight:700; font-size:13px; cursor:pointer; font-family:'Source Sans 3', sans-serif; }
+.report-link:hover { color:#6B685F; }
+.report-title { display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.report-title h1 { font-family:'Manrope', sans-serif; font-weight:800; font-size:22px; margin:0; }
+.report-title .month-nav-label { font-size:15px; padding:0; }
+.report-section-title { font-family:'Manrope', sans-serif; font-weight:800; font-size:15px; margin:0 0 14px; }
+
+.no-print { }
+@media print {
+  .no-print { display:none !important; }
+  body { background:#fff; }
+  .content { max-width:none; padding:0 24px; }
+  .card { border:none; box-shadow:none; padding:0; border-bottom:1px solid #E7E4DD; border-radius:0; padding-bottom:18px; margin-bottom:18px; }
+  .summary-grid { grid-template-columns:repeat(3,1fr); }
+}
+
 @media (max-width: 680px) {
-  .topbar { padding:16px 20px; }
+  .topbar { padding:14px 20px; flex-wrap:wrap; row-gap:10px; }
+  .brand-name { font-size:16px; }
+  .month-nav { order:3; width:100%; justify-content:center; }
   .tabbar-outer { top:70px; }
   .tabbar { padding:0 20px; }
   .content { padding:20px 20px 48px; }

@@ -1,10 +1,13 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import Dashboard from '../components/Dashboard';
 import DespesasTab from '../components/DespesasTab';
 import ReceitasTab from '../components/ReceitasTab';
 import PoupancaTab from '../components/PoupancaTab';
+import MonthNav from '../components/MonthNav';
+import MonthlyReport from '../components/MonthlyReport';
+import { isDateInMonth, isMesAnoInMonth } from '../lib/format';
 
 const TABS = [
   { key: 'dashboard', label: 'Dashboard' },
@@ -21,6 +24,25 @@ export default function HomePage() {
   const [receitas, setReceitas] = useState([]);
   const [poupanca, setPoupanca] = useState([]);
   const [selectedGroupKey, setSelectedGroupKey] = useState(null);
+  const now = new Date();
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
+  const [reportOpen, setReportOpen] = useState(false);
+
+  const monthDespesas = useMemo(
+    () => despesas.filter((d) => isDateInMonth(d.dataPagamento, selectedYear, selectedMonth)),
+    [despesas, selectedYear, selectedMonth]
+  );
+  const monthReceitas = useMemo(
+    () => receitas.filter((r) => isMesAnoInMonth(r.mesAno, selectedYear, selectedMonth)),
+    [receitas, selectedYear, selectedMonth]
+  );
+
+  function handleMonthChange(year, month) {
+    setSelectedYear(year);
+    setSelectedMonth(month);
+    setSelectedGroupKey(null);
+  }
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -88,7 +110,7 @@ export default function HomePage() {
 
   return (
     <div>
-      <div className="topbar">
+      <div className="topbar no-print">
         <div className="brand">
           <div className="brand-mark">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
@@ -98,22 +120,28 @@ export default function HomePage() {
           </div>
           <div className="brand-name">Controle Larissa</div>
         </div>
-        <button className="logout-btn" onClick={handleLogout}>Sair</button>
-      </div>
-
-      <div className="tabbar-outer">
-        <div className="tabbar">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              className={'tab-btn' + (activeTab === t.key ? ' active' : '')}
-              onClick={() => handleTabChange(t.key)}
-            >
-              {t.label}
-            </button>
-          ))}
+        <MonthNav year={selectedYear} month={selectedMonth} onChange={handleMonthChange} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+          {!reportOpen && <button className="report-link" onClick={() => setReportOpen(true)}>Relatório</button>}
+          <button className="logout-btn" onClick={handleLogout}>Sair</button>
         </div>
       </div>
+
+      {!reportOpen && (
+        <div className="tabbar-outer no-print">
+          <div className="tabbar">
+            {TABS.map((t) => (
+              <button
+                key={t.key}
+                className={'tab-btn' + (activeTab === t.key ? ' active' : '')}
+                onClick={() => handleTabChange(t.key)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="content">
         {loading ? (
@@ -123,18 +151,26 @@ export default function HomePage() {
             <div className="empty-state">{loadError}</div>
             <div className="form-actions"><button className="btn-primary" onClick={loadAll}>Tentar de novo</button></div>
           </div>
+        ) : reportOpen ? (
+          <MonthlyReport
+            despesas={monthDespesas}
+            receitas={monthReceitas}
+            year={selectedYear}
+            month={selectedMonth}
+            onBack={() => setReportOpen(false)}
+          />
         ) : (
           <>
             {activeTab === 'dashboard' && (
               <Dashboard
-                despesas={despesas}
-                receitas={receitas}
+                despesas={monthDespesas}
+                receitas={monthReceitas}
                 selectedGroupKey={selectedGroupKey}
                 onSelectGroup={setSelectedGroupKey}
               />
             )}
-            {activeTab === 'despesas' && <DespesasTab despesas={despesas} onSubmit={addDespesa} />}
-            {activeTab === 'receitas' && <ReceitasTab receitas={receitas} onSubmit={addReceita} />}
+            {activeTab === 'despesas' && <DespesasTab despesas={monthDespesas} onSubmit={addDespesa} />}
+            {activeTab === 'receitas' && <ReceitasTab receitas={monthReceitas} onSubmit={addReceita} />}
             {activeTab === 'poupanca' && <PoupancaTab poupanca={poupanca} onSubmit={addPoupanca} />}
           </>
         )}
