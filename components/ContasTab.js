@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import {
   formatBRL, hexTint, groupKeyOf, todayISO, GROUP_PALETTE, MONTH_NAMES,
-  digitsToAmount, amountToDigits, formatDigitsAsCurrency, extractDigits
+  digitsToAmount, amountToDigits, formatDigitsAsCurrency, extractDigits, formatDateLabel
 } from '../lib/format';
 
 function computeGroups(despesas) {
@@ -12,16 +12,23 @@ function computeGroups(despesas) {
   despesas.forEach((d) => {
     const key = groupKeyOf(d);
     if (!groupMap[key]) {
-      groupMap[key] = { key, tipo: d.tipo, tipoDetalhe: d.tipoDetalhe, total: 0, count: 0 };
+      groupMap[key] = { key, tipo: d.tipo, tipoDetalhe: d.tipoDetalhe, total: 0, count: 0, minData: d.dataPagamento, maxData: d.dataPagamento };
       order.push(key);
     }
     groupMap[key].total += d.valor;
     groupMap[key].count += 1;
+    if (d.dataPagamento < groupMap[key].minData) groupMap[key].minData = d.dataPagamento;
+    if (d.dataPagamento > groupMap[key].maxData) groupMap[key].maxData = d.dataPagamento;
   });
   const list = order.map((k) => groupMap[k]).sort((a, b) => b.total - a.total);
   const colorByKey = {};
   list.forEach((g, i) => { colorByKey[g.key] = GROUP_PALETTE[i % GROUP_PALETTE.length]; });
   return { list, colorByKey };
+}
+
+function vencimentoLabel(g) {
+  if (g.minData === g.maxData) return formatDateLabel(g.minData);
+  return formatDateLabel(g.minData) + ' a ' + formatDateLabel(g.maxData);
 }
 
 export default function ContasTab({ despesas, pagamentos, year, month, onRegistrarPagamento }) {
@@ -143,6 +150,7 @@ export default function ContasTab({ despesas, pagamentos, year, month, onRegistr
                     <span className="group-count" style={{ color: statusColor }}>{statusText}</span>
                   </div>
                   <div className="group-label">{label}</div>
+                  <div className="group-vencimento">Vence em {vencimentoLabel(g)}</div>
                   <div className="group-total" style={{ color }}>{formatBRL(g.total)}</div>
                 </button>
               );
@@ -157,7 +165,9 @@ export default function ContasTab({ despesas, pagamentos, year, month, onRegistr
         <div className="month-picker-overlay" onClick={closeSheet}>
           <div className="month-picker-card" onClick={(e) => e.stopPropagation()} style={{ width: 340 }}>
             <div className="month-picker-title">{openGroup.tipo}{openGroup.tipoDetalhe ? ' · ' + openGroup.tipoDetalhe : ''}</div>
-            <div className="field-hint" style={{ marginBottom: 18 }}>Total do mês: {formatBRL(openGroup.total)}</div>
+            <div className="field-hint" style={{ marginBottom: 18 }}>
+              Total do mês: {formatBRL(openGroup.total)} · Vence em {vencimentoLabel(openGroup)}
+            </div>
 
             <label className="field">
               <span>Valor pago</span>
