@@ -125,7 +125,15 @@ export default function DespesasTab({ despesas, onSubmit, onUpdate, onDelete }) 
   }
 
   const colorByKey = colorsByGroup(despesas);
-  const sorted = despesas.slice().sort((a, b) => new Date(b.dataPagamento) - new Date(a.dataPagamento));
+  const groupedByTipo = TIPOS
+    .map((tipo) => ({
+      tipo,
+      items: despesas
+        .filter((d) => d.tipo === tipo)
+        .slice()
+        .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR') || new Date(b.dataPagamento) - new Date(a.dataPagamento))
+    }))
+    .filter((g) => g.items.length > 0);
   const detalheInfo = DETALHE_LABEL[form.tipo];
 
   return (
@@ -226,26 +234,33 @@ export default function DespesasTab({ despesas, onSubmit, onUpdate, onDelete }) 
 
       <div className="card">
         <h2>Despesas cadastradas</h2>
-        {sorted.length ? (
-          <div className="tx-list">
-            {sorted.map((d) => {
-              const key = groupKeyOf(d);
-              const color = colorByKey[key] || '#9B9A93';
-              const initialSrc = d.tipoDetalhe && d.tipoDetalhe.length ? d.tipoDetalhe : d.tipo;
-              const tipoLabel = d.tipo + (d.tipoDetalhe ? ' · ' + d.tipoDetalhe : '');
-              return (
-                <div className="tx-row tx-row-clickable" key={d.id} onClick={() => startEdit(d)}>
-                  <div className="tx-icon" style={{ background: hexTint(color, 0.82) }}>
-                    <span className="tx-icon-letter" style={{ color }}>{initialSrc.charAt(0).toUpperCase()}</span>
-                  </div>
-                  <div className="tx-info">
-                    <div className="tx-desc">{d.nome}</div>
-                    <div className="tx-meta">{tipoLabel} · {periodicidadeLabel(d)} · {formatDateLabel(d.dataPagamento)}</div>
-                  </div>
-                  <div className="tx-value negative">{formatBRL(d.valor)}</div>
+        {groupedByTipo.length ? (
+          <div className="stack">
+            {groupedByTipo.map((g) => (
+              <div key={g.tipo}>
+                <div className="field-label">{g.tipo}</div>
+                <div className="tx-list">
+                  {g.items.map((d) => {
+                    const key = groupKeyOf(d);
+                    const color = colorByKey[key] || '#9B9A93';
+                    const initialSrc = d.tipoDetalhe && d.tipoDetalhe.length ? d.tipoDetalhe : d.tipo;
+                    const detalheLabel = d.tipoDetalhe ? d.tipoDetalhe + ' · ' : '';
+                    return (
+                      <div className="tx-row tx-row-clickable" key={d.id} onClick={() => startEdit(d)}>
+                        <div className="tx-icon" style={{ background: hexTint(color, 0.82) }}>
+                          <span className="tx-icon-letter" style={{ color }}>{initialSrc.charAt(0).toUpperCase()}</span>
+                        </div>
+                        <div className="tx-info">
+                          <div className="tx-desc">{d.nome}</div>
+                          <div className="tx-meta">{detalheLabel}{periodicidadeLabel(d)} · {formatDateLabel(d.dataPagamento)}</div>
+                        </div>
+                        <div className="tx-value negative">{formatBRL(d.valor)}</div>
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         ) : (
           <div className="empty-state">Nenhuma despesa cadastrada ainda.</div>

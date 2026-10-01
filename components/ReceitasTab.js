@@ -1,12 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { formatBRL, hexTint, formatMesAnoLabel, currentMonthISO, digitsToAmount, amountToDigits, formatDigitsAsCurrency, extractDigits } from '../lib/format';
+import { formatBRL, hexTint, formatDateLabel, formatMesAnoLabel, currentMonthISO, todayISO, digitsToAmount, amountToDigits, formatDigitsAsCurrency, extractDigits } from '../lib/format';
 
 const NOMES = ['Salário', 'Vale', 'Outro'];
 
 function emptyForm() {
-  return { nome: 'Salário', nomeCustom: '', valorDigits: '', mesAno: currentMonthISO() };
+  return { nome: 'Salário', nomeCustom: '', valorDigits: '', mesAno: currentMonthISO(), dataRecebimento: todayISO() };
 }
 
 function formFromReceita(r) {
@@ -15,7 +15,8 @@ function formFromReceita(r) {
     nome: isPreset ? r.nome : 'Outro',
     nomeCustom: isPreset ? '' : r.nome,
     valorDigits: amountToDigits(r.valor),
-    mesAno: r.mesAno
+    mesAno: r.mesAno,
+    dataRecebimento: r.dataRecebimento || todayISO()
   };
 }
 
@@ -27,7 +28,7 @@ export default function ReceitasTab({ receitas, onSubmit, onUpdate, onDelete }) 
   const [error, setError] = useState('');
 
   const finalNome = form.nome === 'Outro' ? form.nomeCustom.trim() : form.nome;
-  const valid = !!finalNome && parseInt(form.valorDigits || '0', 10) > 0 && !!form.mesAno;
+  const valid = !!finalNome && parseInt(form.valorDigits || '0', 10) > 0 && !!form.mesAno && !!form.dataRecebimento;
 
   function startEdit(r) {
     setEditingId(r.id);
@@ -45,7 +46,7 @@ export default function ReceitasTab({ receitas, onSubmit, onUpdate, onDelete }) 
     if (!valid || saving) return;
     setSaving(true);
     setError('');
-    const payload = { nome: finalNome, valor: digitsToAmount(form.valorDigits), mesAno: form.mesAno };
+    const payload = { nome: finalNome, valor: digitsToAmount(form.valorDigits), mesAno: form.mesAno, dataRecebimento: form.dataRecebimento };
     try {
       if (editingId) {
         await onUpdate(editingId, payload);
@@ -114,9 +115,17 @@ export default function ReceitasTab({ receitas, onSubmit, onUpdate, onDelete }) 
             />
           </label>
           <label className="field">
-            <span>Mês e ano</span>
-            <input type="month" value={form.mesAno} onChange={(e) => setForm((f) => ({ ...f, mesAno: e.target.value }))} />
+            <span>Data que recebeu</span>
+            <input type="date" value={form.dataRecebimento} onChange={(e) => setForm((f) => ({ ...f, dataRecebimento: e.target.value }))} />
           </label>
+        </div>
+
+        <label className="field">
+          <span>Referente ao mês</span>
+          <input type="month" value={form.mesAno} onChange={(e) => setForm((f) => ({ ...f, mesAno: e.target.value }))} />
+        </label>
+        <div className="field-hint">
+          A data é só pra registro de quando caiu na conta - o que conta pro orçamento é o mês de referência escolhido aqui, então um salário recebido no fim ou início do mês pode ser lançado no mês que você quiser.
         </div>
 
         <div className="form-actions">
@@ -146,7 +155,9 @@ export default function ReceitasTab({ receitas, onSubmit, onUpdate, onDelete }) 
                 </div>
                 <div className="tx-info">
                   <div className="tx-desc">{r.nome}</div>
-                  <div className="tx-meta">{formatMesAnoLabel(r.mesAno)}</div>
+                  <div className="tx-meta">
+                    {formatMesAnoLabel(r.mesAno)}{r.dataRecebimento ? ' · recebido em ' + formatDateLabel(r.dataRecebimento) : ''}
+                  </div>
                 </div>
                 <div className="tx-value positive">{formatBRL(r.valor)}</div>
               </div>

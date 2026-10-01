@@ -27,6 +27,8 @@ function computeGroups(despesas) {
 export default function ContasTab({ despesas, pagamentos, year, month, onRegistrarPagamento }) {
   const [openGroup, setOpenGroup] = useState(null);
   const [valorDigits, setValorDigits] = useState('');
+  const [descontoDigits, setDescontoDigits] = useState('');
+  const [jurosDigits, setJurosDigits] = useState('');
   const [dataPagamento, setDataPagamento] = useState(todayISO());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -37,19 +39,31 @@ export default function ContasTab({ despesas, pagamentos, year, month, onRegistr
     return pagamentos.find((p) => p.tipo === g.tipo && p.tipoDetalhe === g.tipoDetalhe) || null;
   }
 
+  // "Efetivo" é quanto do valor pago realmente quita a despesa original:
+  // desconto conta como se tivesse sido pago (reduz o que falta), e juros é
+  // um acréscimo que o valor pago cobre sem contar como quitação - sem isso
+  // um pagamento com desconto sobraria "faltando" e um com juros pareceria
+  // pagamento a mais indevido.
+  function efetivoOf(p) {
+    if (!p) return 0;
+    return p.valorPago + (p.desconto || 0) - (p.juros || 0);
+  }
+
   function statusOf(g) {
     const p = pagamentoFor(g);
-    const valorPago = p ? p.valorPago : 0;
-    if (valorPago <= 0) return { state: 'unpaid', valorPago };
-    if (valorPago >= g.total - 0.004) return { state: 'paid', valorPago };
-    return { state: 'partial', valorPago };
+    const efetivo = efetivoOf(p);
+    if (efetivo <= 0) return { state: 'unpaid', efetivo };
+    if (efetivo >= g.total - 0.004) return { state: 'paid', efetivo };
+    return { state: 'partial', efetivo };
   }
 
   function openSheet(g) {
     const status = statusOf(g);
-    const restante = Math.max(0, g.total - status.valorPago);
+    const restante = Math.max(0, g.total - status.efetivo);
     setOpenGroup(g);
     setValorDigits(amountToDigits(restante));
+    setDescontoDigits('');
+    setJurosDigits('');
     setDataPagamento(todayISO());
     setError('');
   }
@@ -72,7 +86,9 @@ export default function ContasTab({ despesas, pagamentos, year, month, onRegistr
         ano: year,
         mes: month + 1,
         valorPago,
-        dataPagamento
+        dataPagamento,
+        desconto: digitsToAmount(descontoDigits),
+        juros: digitsToAmount(jurosDigits)
       });
       setOpenGroup(null);
     } catch (e) {
@@ -83,11 +99,33 @@ export default function ContasTab({ despesas, pagamentos, year, month, onRegistr
   }
 
   const valorPagoNum = digitsToAmount(valorDigits);
-  const restanteAposSalvar = openGroup ? Math.max(0, Math.round((openGroup.total - valorPagoNum) * 100) / 100) : 0;
+  const descontoNum = digitsToAmount(descontoDigits);
+  const jurosNum = digitsToAmount(jurosDigits);
+  const restanteAposSalvar = openGroup
+    ? Math.max(0, Math.round((openGroup.total - valorPagoNum - descontoNum + jurosNum) * 100) / 100)
+    : 0;
   const nextMonthLabel = MONTH_NAMES[(month + 1) % 12];
+
+  const totalGeral = list.reduce((s, g) => s + g.total, 0);
+  const totalQuitado = list.reduce((s, g) => {
+    const efetivo = statusOf(g).efetivo;
+    return s + Math.max(0, Math.min(g.total, efetivo));
+  }, 0);
+  const faltaPagar = Math.max(0, Math.round((totalGeral - totalQuitado) * 100) / 100);
 
   return (
     <div className="stack">
+      <div className="summary-grid">
+        <div className="card">
+          <p className="summary-label">Total do mês</p>
+          <p className="summary-value">{formatBRL(totalGeral)}</p>
+        </div>
+        <div className="card">
+          <p className="summary-label">Falta pagar</p>
+          <p className="summary-value" style={{ color: faltaPagar > 0.004 ? '#D14343' : '#2E9E5B' }}>{formatBRL(faltaPagar)}</p>
+        </div>
+      </div>
+
       <div className="card">
         <h2>Contas do mês</h2>
         {list.length ? (
@@ -96,7 +134,7 @@ export default function ContasTab({ despesas, pagamentos, year, month, onRegistr
               const status = statusOf(g);
               const color = colorByKey[g.key];
               const label = g.tipo + (g.tipoDetalhe ? ' · ' + g.tipoDetalhe : '');
-              const statusText = status.state === 'paid' ? 'Paga' : status.state === 'partial' ? 'Falta ' + formatBRL(g.total - status.valorPago) : 'Não paga';
+              const statusText = status.state === 'paid' ? 'Paga' : status.state === 'partial' ? 'Falta ' + formatBRL(g.total - status.efetivo) : 'Não paga';
               const statusColor = status.state === 'paid' ? '#2E9E5B' : status.state === 'partial' ? '#E0A548' : '#6B685F';
               return (
                 <button className="group-card" key={g.key} onClick={() => openSheet(g)}>
@@ -133,6 +171,30 @@ export default function ContasTab({ despesas, pagamentos, year, month, onRegistr
               <span>Data do pagamento</span>
               <input type="date" value={dataPagamento} onChange={(e) => setDataPagamento(e.target.value)} />
             </label>
+
+            <div className="field-row">
+              <label className="field">
+                <span>Desconto</span>
+                <input
+                  type="text" inputMode="decimal"
+                  value={formatDigitsAsCurrency(descontoDigits)}
+                  onChange={(e) => setDescontoDigits(extractDigits(e.target.value))}
+                />
+              </label>
+              <label className="field">
+                <span>Juros</span>
+                <input
+                  type="text" inputMode="decimal"
+                  value={formatDigitsAsCurrency(jurosDigits)}
+                  onChange={(e) => setJurosDigits(extractDigits(e.target.value))}
+                />
+              </label>
+            </div>
+            <div className="field-hint">
+              Use desconto quando pagar menos por causa de um abatimento (ex: pagou R$ 95 de uma conta de R$ 100 com R$ 5 de desconto),
+              e juros quando pagar mais por causa de atraso/multa (ex: pagou R$ 105 de uma conta de R$ 100 com R$ 5 de juros) -
+              assim o saldo não fecha errado.
+            </div>
 
             {restanteAposSalvar > 0.004 && (
               <div className="field-hint">
