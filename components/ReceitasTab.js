@@ -125,7 +125,9 @@ export default function ReceitasTab({ receitas, onSubmit, onUpdate, onDelete }) 
           <input type="month" value={form.mesAno} onChange={(e) => setForm((f) => ({ ...f, mesAno: e.target.value }))} />
         </label>
         <div className="field-hint">
-          A data é só pra registro de quando caiu na conta - o que conta pro orçamento é o mês de referência escolhido aqui, então um salário recebido no fim ou início do mês pode ser lançado no mês que você quiser.
+          Dica: use "Referente ao mês" como o mês das contas que esse dinheiro vai pagar, não necessariamente o mês em que caiu na conta.
+          Por exemplo, se o Vale recebido em outubro é pra pagar o empréstimo que vence em novembro, cadastre esse Vale como referente a Novembro -
+          assim, ao olhar o mês de novembro, essa receita e essa despesa aparecem juntas e batendo certinho. A "Data que recebeu" fica só como registro de quando o dinheiro realmente entrou.
         </div>
 
         <div className="form-actions">
